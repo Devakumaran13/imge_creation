@@ -1,0 +1,49 @@
+{
+    
+    "softwares": [
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/dtsenv.json"
+        },
+          {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/ServiceRegistry.zip"
+          },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/SQLLOCALDB.MSI"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/ucrtbased.dll"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/VC_redist.x64.exe"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/vcruntime140d.dll"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/CDFControl.zip"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/SQLExpress.zip"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/docker-24.0.7.zip"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/PsExec.exe"
+        },
+        {
+            "type": "file",
+            "source": "https://stdtsimagepackages01.blob.core.windows.net/support/CdfCaptureService.zip"
+        }      
+    ]
+}
