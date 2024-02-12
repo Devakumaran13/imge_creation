@@ -18,9 +18,8 @@
     "vm_size": "",
     "os_type": "",
     "image_definition": "",
-    "publisher": "",
-    "offer": "",
-    "sku": "",
+
+   
     "image_version": "",
     "storage_resource_group": "",
     "storageAccountName": "",
@@ -49,17 +48,22 @@
       "winrm_insecure": "{{ user `winrm_insecure`}}",
       "winrm_timeout": "{{ user `winrm_timeout`}}",
       "build_resource_group_name": "{{user `resource_group_name`}}",
-      "managed_image_resource_group_name": "{{user `resource_group_name`}}",
+      "managed_image_resource_group_name": "rg_compute_ei_dev_ue",
+      "managed_image_name": "poc_acg_image",
       "virtual_network_name": "{{user `Virtual_Network`}}",
       "virtual_network_subnet_name": "{{user `Subnet`}}",
       "virtual_network_resource_group_name": "{{user `Virtual_NetworkRG`}}",
-      "managed_image_name": "{{user `vm_name`}}",
-      "vm_size": "{{user `vm_size`}}",
-      "os_type": "{{user `os_type`}}",
-      "image_publisher": "{{ user `publisher`}}",
-      "image_offer": "{{ user `offer`}}",
-      "image_sku": "{{ user `sku`}}",
-      "image_version": "{{ user `image_version`}}",
+	"vm_size": "{{user `vm_size`}}",
+     "os_type": "{{user `os_type`}}",
+      "shared_image_gallery": {
+       		"subscription": "11b5b356-1a67-4764-a8be-45bea58c2016",
+	        "resource_group": "rg_compute_ei_dev_ue",
+	        "gallery_name": "igdts001",
+	        "image_name": "dev_dts_w2k19_rtm_en",
+	        "image_version": "1.0.16"
+},
+      
+      
     
       "azure_tags": {
         "bu": "sbo",
