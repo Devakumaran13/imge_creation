@@ -1,36 +1,213 @@
-# This is a basic workflow to help you get started with Actions
-
-name: CI
-
-# Controls when the workflow will run
-on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+# Name of Action workflow
+name: Image Creation Pipeline
+on: 
+ workflow_dispatch:
+  inputs:
+      application:
+        description: 'Application Name'
+        required: true
+        default: 'DTS'
+        type: choice
+        options:
+        - DTS
+        - Licensing
+      runtype:
+        description: 'Run Type'
+        required: true
+        default: 'Build'
+        type: choice
+        options:
+          - Build
+          - Promote to Staging
+          - Promote to Production      
+# Declaring the variables in env   
+env:
+   winrm_password: ${{ secrets.WINRM_PASSWORD}}
+   StorageAccountKey: ${{ secrets.STORAGEACCOUNTKEY }}
+   sapassword: ${{ secrets.SAPWD }}
+   subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+   environment_setup: ${{ secrets.Environment_Setup }}
+   runId: ${{ github.run_id }}
+   
+permissions:
+      id-token: write
+      pages: write
+      contents: read
+      
+# Jobs are listed to be run of GitHub runners. 
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+   # JOB 1 : This job is to validate all the input values used in workflow. ***************************************** ***************************************** *******************************************
+    Validate-Inputs:
+      if: ${{contains(vars.job_switches, 'skip') }} #skip validate
+      name: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}{2}', 'Validate Inputs for ', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}{2}', 'Validate Inputs for ', inputs.application, '-Staging') || format('{0}{1}{2}', 'Validate Inputs for ', inputs.application, '-Build')}}
+      runs-on: dts-dev-runner-3 # dts-dev-runner-3 #selfhosted-win-runner
+      environment: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}', inputs.application, '-Staging') || format('{0}{1}', inputs.application, '-Build')}}
+      steps:
+      # Login to the Azure
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+            
+        # Checkout repo code
+      - name: Checkout repo code
+        uses: actions/checkout@v1
+        
+      - name: Validate Packer Configuration
+        run: Common/Execute_PreValidation.ps1 -app ${{inputs.application}} -client_id ${{ secrets.AZURE_CLIENT_ID }} -subscription_id ${{ secrets.AZURE_SUBSCRIPTION_ID }} -tenant_id ${{ secrets.AZURE_TENANT_ID}}
+        shell: pwsh
+    # JOB 1 ENDS  ***************************************** ***************************************** *******************************************
+   
+    # JOB 2 : This job is to Build packer image.********************************************************************************** *****************************************       
+    Build-Image:
+      if: ${{contains(vars.job_switches, 'packer') && inputs.runtype == 'build'}} #skip
+    #  needs: Validate-Inputs
+      name: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}{2}', 'Generate Image for ', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}{2}', 'Generate Image for ', inputs.application, '-Staging') || format('{0}{1}{2}', 'Generate Image for ', inputs.application, '-Build')}}
+      runs-on: dts-dev-runner-3 # dts-dev-runner-3 #selfhosted-win-runner
+      environment: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}', inputs.application, '-Staging') || format('{0}{1}', inputs.application, '-Build')}}
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+     # Login to the Azure
+      steps:
+        - name: Azure login
+          uses: azure/login@v1
+          with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+          env:
+            PRODUCT_VERSION: "latest"
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+         # This task is setup the packer
+        - name: Setup Packer
+          uses: hashicorp/setup-packer@main
+          id: setup
+          with:
+            version: "1.8.6"
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+        # Checkout repo code
+        - name: Checkout repo code
+          uses: actions/checkout@v1
+
+        # This task is build the packer Image using GitHub secrets
+        - name: build custom image
+          run: >
+                packer build -force "-var-file=${{inputs.Application}}/Packer/Variables.json" ${{inputs.Application}}/Packer/PackerImageTemplate.json
+          
+        - name: Azure login
+          uses: azure/login@v1
+          with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+
+       # This task will be called only upon failure of previous task to clean up any resources created as part of packer
+          if: always()
+        - name: Failure cleanup Task
+          run: Common/Execute-Cleanup.ps1 -runId ${{env.runId}} -app ${{inputs.Application}}
+          shell: pwsh 
+    # JOB 2 ENDS  ***************************************** ***************************************** *******************************************
+           
+    # JOB 3 : This job is to do post validation. ***************************************** ***************************************** ***************************************** ***************************************** ***************************************** ***************************************** *****************************************   
+    Post-Validation:
+      if: ${{contains(vars.job_switches, 'skip') }} #skip postvalidation
+      needs: Build-Image
+      name: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}{2}', 'Post Validation for ', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}{2}', 'Post Validation for ', inputs.application, '-Staging') || format('{0}{1}{2}', 'Post Validation for ', inputs.application, '-Build')}}
+      runs-on: dts-dev-runner-3 # dts-dev-runner-3 #selfhosted-win-runner
+      environment: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}', inputs.application, '-Staging') || format('{0}{1}', inputs.application, '-Build')}}
+      steps:
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+      
+      - uses: actions/checkout@v1
+      - name: Post Validation for running
+        run: Common/Execute_PostValidation.ps1 -app ${{inputs.Application}} -subscription_id ${{ secrets.AZURE_SUBSCRIPTION_ID }} -run_Id ${{env.runId}} -Storage_Account_Key ${{secrets.StorageAccountKey}}
+        shell: pwsh 
+  # JOB 3 ENDS  ***************************************** ***************************************** *******************************************
+    
+  # JOB 4 : This job is to publish the image in the Azure compute gallery.  ***************************************** ***************************************** 
+    Publish:
+      if: ${{contains(vars.job_switches, 'skip') }} #publish
+      needs: Post-Validation #Post-Validation
+      name: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}{2}', 'Publish for ', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}{2}', 'Publish Image for ', inputs.application, '-Staging') || format('{0}{1}{2}', 'Publish Image for ', inputs.application, '-Build')}}
+      runs-on: dts-dev-runner-3 #dts-dev-runner-3 #selfhosted-win-runner
+      environment: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}', inputs.application, '-Staging') || format('{0}{1}', inputs.application, '-Build')}}
+      steps:
+         # Login to the Azure
+        - name: Azure login
+          uses: azure/login@v1
+          with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+            
+        # Checkout repo code
+        - name: Checkout repo code
+          uses: actions/checkout@v1
+        
+        - name: Publish Image
+          run: Common/Execute-ImagePublish.ps1 -app ${{inputs.Application}} -client_id ${{ secrets.AZURE_CLIENT_ID }} -subscription_id ${{ secrets.AZURE_SUBSCRIPTION_ID }} -tenant_id ${{ secrets.AZURE_TENANT_ID}} -run_Id ${{env.runId}}
+          shell: pwsh
+          id: outvars1
+
+        - name: Azure login
+          uses: azure/login@v1
+          with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+            
+        - name: Publish Secrets 
+          run: Common/Load_AzKeyvault.ps1 -app ${{inputs.Application}} -run_type ${{ inputs.runtype}} -subscription_id ${{ secrets.AZURE_SUBSCRIPTION_ID }} -sapassword ${{ secrets.SAPWD }}
+          shell: pwsh
+          id: outvars2
+
+        - name: Publish Artifacts
+          shell: pwsh
+          run: Common/Execute_PublishArtifacts.ps1 -app ${{inputs.Application}} -image_version_url ${{ steps.outvars1.outputs.ImageVersionUrl }} -az_keyvault_Url ${{ steps.outvars2.outputs.keyvaultUrl }}
+
+        - name: Upload Artifacts
+          uses: actions/upload-artifact@v3
+          with: 
+            name: artifacts-for-download
+            path: WorkflowArtifact
+
+   # JOB 4 ENDS  ***************************************** ***************************************** *******************************************
+   
+   #JOB 5 : This job is to configure image for the promotion. ***************************************** *****************************************   
+    Build-image-Promotion:
+      if: ${{contains(vars.job_switches, 'skip') &&  contains(inputs.runtype, 'Promotion')}} 
+      needs: Validate-Inputs
+      name: "${{ inputs.runtype}} build"
+      runs-on: dts-dev-runner-3 #dts-dev-runner-3 #selfhosted-win-runner
+      environment: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}', inputs.application, '-Staging') || format('{0}{1}', inputs.application, '-Build')}}
+      steps:
+        - name: Build promotion image
+          run: |
+           echo "Testing build for image ${{ inputs.runtype}}"
+    # JOB 5 ENDS  ***************************************** ***************************************** *******************************************
+   
+    # JOB 6 : This job is to Publish Image for to higher environment in Azure compute gallery. ***************************************** ***************************************** ***************************************** 
+    Promote-image:
+      if: ${{contains(vars.job_switches, 'skip') }}
+      needs: Build-image-Promotion
+      name: "${{ inputs.runtype}} - Publish"
+      runs-on: selfhosted-win-runner #dts-dev-runner-3 #selfhosted-win-runner
+      environment: ${{ contains(inputs.runtype, 'Production') && format('{0}{1}', inputs.application, '-Production')  || contains(inputs.runtype, 'Staging') && format('{0}{1}', inputs.application, '-Staging') || format('{0}{1}', inputs.application, '-Build')}}      
+      steps:
+        - name: Promote Image
+          run: |
+           echo "Testing Image Promotion Script for ${{ inputs.runtype}}"
+     # JOB 6 ENDS  ***************************************** ***************************************** *******************************************
+   
