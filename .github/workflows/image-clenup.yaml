@@ -1,0 +1,37 @@
+# This is the name of workflow  
+name: Image Clean-up Pipeline
+#on: [workflow_dispatch]
+on:  
+ schedule:
+ - cron: '30 06 * * *' # Triggers the workflow on every day UTC 07:59 am ( Pacific 11:59 PM or IST 1:29pm).
+
+permissions:
+      id-token: write
+      pages: write
+      contents: read
+      
+# Jobs are listed to be run of GitHub runners-111. 
+jobs:
+
+# This job is to clean images.
+    ImageGallery-Cleanup:
+      
+      runs-on: selfhosted-win-runner
+      environment: "DTS-Build"
+      steps:
+      # Checkout repo
+      - uses: actions/checkout@v1
+
+      # Login to the Azure
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+            client-id: ${{ secrets.AZURE_CLIENT_ID }}
+            tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+            subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+            enable-AzPSSession: true
+       
+         # Task to Remove Images in gallery.
+      - name: Image Cleanup Script
+        run: Common/Execute_GalleryCleanup.ps1
+        shell: pwsh     
