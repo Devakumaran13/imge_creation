@@ -1,0 +1,11 @@
+{
+  "enableAzLatest": "false",
+  "workloads": "DTS,LIC",
+  "run_types": "Build,Staging,Production",
+  "resource_group_name": "rg_compute_ei_dev_ue",
+  "image_gallery_names": "igdts001,acg01",
+  "az_portal_uri": "https://portal.azure.com/#@prodcsgcorp.onmicrosoft.com/resource/subscriptions/",
+  "contact": "<div>Please contact - <u><a href='https://tsd.tibco.com/servicedesk/customer/portals'>Raise the ticket!</div>",
+  "slack_contact": "<div><a href=https://citrix.slack.com/archives/C061THXDPQR>Slack Channel</a></div>",
+  "teamdetails":"<div><a href=https://github.com/eng-citrix/image-creation-pipeline/graphs/contributors>Team Details</a></a></div>"
+ }
